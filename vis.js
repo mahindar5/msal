@@ -4,6 +4,7 @@ document.getElementById('fileButton').addEventListener('click', async () => {
             description: 'CSV Files',
             accept: { 'text/csv': ['.csv'] }
         }],
+        id: 'filePickerVis',
         multiple: false
     });
 
@@ -40,15 +41,18 @@ function visualizeData(data) {
         return;
     }
 
+    data.sort((a, b) => new Date(a['dateTime']) - new Date(b['dateTime']));
+    data.forEach(row => row.totalCost = row.totalCost / 100);
+
     // Group data by date
     const groupedByDate = data.reduce((acc, row) => {
         const date = row['dateTime'].split('T')[0];
         if (!acc[date]) {
-            acc[date] = { totalCost: 0, quantity: 0, priceInCents: 0, weight: 0 };
+            acc[date] = { totalCost: 0, quantity: 0, totalCost: 0, weight: 0 };
         }
         acc[date].totalCost += parseFloat(row['totalCost']) || 0;
         acc[date].quantity += parseFloat(row['quantity']) || 0;
-        acc[date].priceInCents += parseFloat(row['priceInCents']) / 100 || 0;
+        acc[date].totalCost += parseFloat(row['totalCost']) || 0;
         acc[date].weight += parseFloat(row['weight']) || 0;
         return acc;
     }, {});
@@ -79,33 +83,20 @@ function visualizeData(data) {
     const groupedByProduct = data.reduce((acc, row) => {
         const product = row['productName'];
         if (!acc[product]) {
-            acc[product] = { quantity: 0, priceInCents: 0, count: 0 };
+            acc[product] = { quantity: 0, totalCost: 0, count: 0 };
         }
         acc[product].quantity += parseFloat(row['quantity']) || 0;
-        acc[product].priceInCents += parseFloat(row['priceInCents']) || 0;
+        acc[product].totalCost += parseFloat(row['totalCost']) || 0;
         acc[product].count += 1;
         return acc;
     }, {});
 
     const products = Object.keys(groupedByProduct);
-    const productQuantities = products.map(product => groupedByProduct[product].quantity);
-    const productPrices = products.map(product => groupedByProduct[product].priceInCents / (groupedByProduct[product].count * 100));
-
-    createChart('chart4', 'pie', products, productQuantities, 'Product Quantity Distribution');
-    createChart('chart5', 'bar', products, productPrices, 'Average Price per Product');
+    const productPrices = products.map(product => groupedByProduct[product].totalCost);
 
     // Add Product Price Distribution Pie Chart
-    createChart('chart8', 'pie', products, productPrices, 'Product Price Distribution');
-
-    // Weight distribution (using histogram)
-    const weights = data.map(row => parseFloat(row['weight']) || 0);
-    createHistogram('chart6', weights, 'Weight Distribution');
-
-    // Total Cost vs Quantity Scatter Chart
-    const totalCost = data.map(row => parseFloat(row['totalCost']) || 0);
-    const quantity = data.map(row => parseFloat(row['quantity']) || 0);
-
-    createScatterChart('chart7', totalCost, quantity, 'Total Cost vs Quantity');
+    createChart('chart4', 'bar', products, productPrices, 'Average Price per Product');
+    createChart('chart5', 'pie', products, productPrices, 'Product Price Distribution');
 }
 
 function createChart(chartId, type, labels, data, title) {
