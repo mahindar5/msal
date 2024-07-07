@@ -35,68 +35,72 @@ function parseCSV(text) {
     visualizeData(data);
 }
 
+function normalizeData(data) {
+    return data.map(row => ({
+        ...row,
+        dateTime: new Date(row.dateTime),
+        totalCost: parseFloat(row.totalCost) / 100 || 0,
+        quantity: parseFloat(row.quantity) || 0,
+        weight: parseFloat(row.weight) || 0
+    }));
+}
+
+function groupDataBy(data, key, reducer) {
+    return data.reduce((acc, row) => {
+        const keyValue = key === 'dateTime' ? row[key].toISOString().split('T')[0] : row[key];
+        if (!acc[keyValue]) {
+            acc[keyValue] = reducer.initialValue();
+        }
+        reducer.accumulate(acc[keyValue], row);
+        return acc;
+    }, {});
+}
+
+function createAndDisplayCharts(groupedByDate, groupedByStore, groupedByProduct) {
+    const dates = Object.keys(groupedByDate);
+    createChart('chart1', 'line', dates, dates.map(date => groupedByDate[date].totalCost), 'Total Cost over Time');
+    createChart('chart2', 'line', dates, dates.map(date => groupedByDate[date].quantity), 'Total Quantity over Time');
+
+    const stores = Object.keys(groupedByStore);
+    createChart('chart3', 'bar', stores, stores.map(store => groupedByStore[store].totalCost), 'Total Cost by Store');
+
+    const products = Object.keys(groupedByProduct).sort((a, b) => groupedByProduct[b].totalCost - groupedByProduct[a].totalCost);
+    createChart('chart4', 'bar', products, products.map(product => groupedByProduct[product].totalCost), 'Average Price per Product');
+    createChart('chart5', 'pie', products, products.map(product => groupedByProduct[product].totalCost), 'Product Price Distribution');
+}
+
 function visualizeData(data) {
-    if (data.length === 0) {
-        console.error('No data found');
+    if (!Array.isArray(data) || data.length === 0) {
+        console.error('Invalid or no data found');
         return;
     }
 
-    data.sort((a, b) => new Date(a['dateTime']) - new Date(b['dateTime']));
-    data.forEach(row => row.totalCost = row.totalCost / 100);
+    const normalizedData = normalizeData(data);
 
-    // Group data by date
-    const groupedByDate = data.reduce((acc, row) => {
-        const date = row['dateTime'].split('T')[0];
-        if (!acc[date]) {
-            acc[date] = { totalCost: 0, quantity: 0, totalCost: 0, weight: 0 };
+    const groupedByDate = groupDataBy(normalizedData, 'dateTime', {
+        initialValue: () => ({ totalCost: 0, quantity: 0, weight: 0 }),
+        accumulate: (acc, row) => {
+            acc.totalCost += row.totalCost;
+            acc.quantity += row.quantity;
+            acc.weight += row.weight;
         }
-        acc[date].totalCost += parseFloat(row['totalCost']) || 0;
-        acc[date].quantity += parseFloat(row['quantity']) || 0;
-        acc[date].totalCost += parseFloat(row['totalCost']) || 0;
-        acc[date].weight += parseFloat(row['weight']) || 0;
-        return acc;
-    }, {});
+    });
 
-    const dates = Object.keys(groupedByDate);
-    const totalCosts = dates.map(date => groupedByDate[date].totalCost);
-    const quantities = dates.map(date => groupedByDate[date].quantity);
+    const groupedByStore = groupDataBy(normalizedData, 'storeName', {
+        initialValue: () => ({ totalCost: 0 }),
+        accumulate: (acc, row) => acc.totalCost += row.totalCost
+    });
 
-    createChart('chart1', 'line', dates, totalCosts, 'Total Cost over Time');
-    createChart('chart2', 'line', dates, quantities, 'Total Quantity over Time');
-
-    // Group data by store
-    const groupedByStore = data.reduce((acc, row) => {
-        const store = row['storeName'];
-        if (!acc[store]) {
-            acc[store] = { totalCost: 0 };
+    const groupedByProduct = groupDataBy(normalizedData, 'productName', {
+        initialValue: () => ({ quantity: 0, totalCost: 0, count: 0 }),
+        accumulate: (acc, row) => {
+            acc.quantity += row.quantity;
+            acc.totalCost += row.totalCost;
+            acc.count += 1;
         }
-        acc[store].totalCost += parseFloat(row['totalCost']) || 0;
-        return acc;
-    }, {});
+    });
 
-    const stores = Object.keys(groupedByStore);
-    const storeCosts = stores.map(store => groupedByStore[store].totalCost);
-
-    createChart('chart3', 'bar', stores, storeCosts, 'Total Cost by Store');
-
-    // Group data by product name for quantity distribution and average price
-    const groupedByProduct = data.reduce((acc, row) => {
-        const product = row['productName'];
-        if (!acc[product]) {
-            acc[product] = { quantity: 0, totalCost: 0, count: 0 };
-        }
-        acc[product].quantity += parseFloat(row['quantity']) || 0;
-        acc[product].totalCost += parseFloat(row['totalCost']) || 0;
-        acc[product].count += 1;
-        return acc;
-    }, {});
-
-    const products = Object.keys(groupedByProduct);
-    const productPrices = products.map(product => groupedByProduct[product].totalCost);
-
-    // Add Product Price Distribution Pie Chart
-    createChart('chart4', 'bar', products, productPrices, 'Average Price per Product');
-    createChart('chart5', 'pie', products, productPrices, 'Product Price Distribution');
+    createAndDisplayCharts(groupedByDate, groupedByStore, groupedByProduct);
 }
 
 function createChart(chartId, type, labels, data, title) {
